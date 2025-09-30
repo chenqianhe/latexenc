@@ -1,0 +1,20 @@
+{
+  "name": "latexenc",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "eslint . --fix"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@antfu/eslint-config": "^2.7.1",
+    "eslint": "^9.4.0",
+    "typescript": "^5.5.3",
+    "vitest": "^1.5.3"
+  }
+}
