@@ -1,0 +1,3 @@
+[submodule "pylatexenc"]
+	path = pylatexenc
+	url = https://github.com/phfaist/pylatexenc
