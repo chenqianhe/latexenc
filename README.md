@@ -1,7 +1,7 @@
 # latexenc (TypeScript)
 
 This package reimplements a subset of the functionality provided by the
-[`pylatexenc`](pylatexenc-main/README.rst) Python project in TypeScript.  It is
+[`pylatexenc`](pylatexenc/README.rst) Python project in TypeScript.  It is
 focused on parsing LaTeX snippets and producing a plain text representation,
 mirroring the role of the original project's `latexwalker` and `latex2text`
 modules.

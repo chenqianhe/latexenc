@@ -1,11 +1,11 @@
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LatexNodes2Text } from '../latex2text/latex2text'
 import { generatedEnvironmentParsingSpecs, generatedMacroParsingSpecs, generatedSpecialParsingSpecs } from '../data/generatedParsingSpec'
+import { LatexNodes2Text } from './latex2text'
 
 const projectRoot = path.resolve(process.cwd())
-const pythonModulePath = path.join(projectRoot, 'pylatexenc-main')
+const pythonModulePath = path.join(projectRoot, 'pylatexenc')
 
 const pythonScript = `import sys, json, os
 sys.path.insert(0, os.path.abspath(${JSON.stringify(pythonModulePath)}))
@@ -116,7 +116,12 @@ describe('latexNodes2Text parity with pylatexenc', () => {
       try {
         py = pythonLatexToText(latex)
       }
-      catch {
+      catch (error) {
+        const errorMessage = `${error}`
+        if (errorMessage.includes('len(node.nodeargs) == 0')) {
+          // pylatexenc raises this TypeError for legacy bare macros such as \verb; treat it as an expected warning.
+          console.warn('Expected pylatexenc warning while exercising legacy macros (e.g. \\verb).')
+        }
         // Some pylatexenc macros rely on additional state and may raise; skip parity check for those.
         continue
       }
