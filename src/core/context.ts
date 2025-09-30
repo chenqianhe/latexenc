@@ -13,6 +13,7 @@ export interface MacroParsingSpec {
   name: string
   arguments: MacroArgumentSpec[]
   swallowWhitespace?: boolean
+  optionalArgNoSpace?: boolean
 }
 
 export interface EnvironmentParsingSpec {

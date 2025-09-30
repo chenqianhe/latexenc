@@ -1,4 +1,5 @@
 import type { LatexEnvironmentNode, LatexMacroNode, LatexNode, LatexSpecialsNode } from '../core/nodes'
+import type { LatexNodes2Text } from './latex2text'
 
 export type MacroTextReplacement = string | MacroTextReplacementFn
 export type MacroTextReplacementFn = (info: MacroTextReplacementInfo) => string
@@ -7,6 +8,7 @@ export interface MacroTextReplacementInfo {
   node: LatexMacroNode
   argumentIndex?: number
   toText: (nodes: LatexNode | LatexNode[]) => string
+  context: LatexNodes2Text
 }
 
 export interface MacroTextSpec {
@@ -21,6 +23,7 @@ export type EnvironmentTextReplacementFn = (info: EnvironmentTextReplacementInfo
 export interface EnvironmentTextReplacementInfo {
   node: LatexEnvironmentNode
   toText: (nodes: LatexNode | LatexNode[]) => string
+  context: LatexNodes2Text
 }
 
 export interface EnvironmentTextSpec {

@@ -1,29 +1,177 @@
+import { execFileSync } from 'node:child_process'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LatexNodes2Text } from '../latex2text/latex2text'
+import { generatedEnvironmentParsingSpecs, generatedMacroParsingSpecs, generatedSpecialParsingSpecs } from '../data/generatedParsingSpec'
 
-const toText = (input: string): string => new LatexNodes2Text().latexToText(input)
+const projectRoot = path.resolve(process.cwd())
+const pythonModulePath = path.join(projectRoot, 'pylatexenc-main')
 
-describe('latexNodes2Text', () => {
-  it('converts basic formatting macros', () => {
-    const result = toText('Hello \\textbf{world}!')
-    expect(result).toBe('Hello world!')
+const pythonScript = `import sys, json, os
+sys.path.insert(0, os.path.abspath(${JSON.stringify(pythonModulePath)}))
+from pylatexenc.latex2text import LatexNodes2Text
+latex = sys.stdin.read()
+text = LatexNodes2Text().latex_to_text(latex)
+sys.stdout.write(json.dumps(text))
+`
+
+function pythonLatexToText(latex: string): string {
+  const output = execFileSync('python3', ['-c', pythonScript], {
+    input: latex,
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+    encoding: 'utf-8',
+  })
+  return JSON.parse(output)
+}
+
+function tsLatexToText(latex: string): string {
+  return new LatexNodes2Text().latexToText(latex)
+}
+
+function buildMacroInvocation(name: string, argspec: string): string {
+  let latex = `\\${name}`
+  let mandatoryIndex = 1
+  let optionalIndex = 1
+  for (const ch of argspec) {
+    if (ch === '*') {
+      latex += '*'
+    }
+    else if (ch === '[') {
+      latex += `[opt${optionalIndex++}]`
+    }
+    else if (ch === '{') {
+      latex += `{ARG${mandatoryIndex++}}`
+    }
+  }
+  return latex
+}
+
+const equationEnvironmentNames = new Set([
+  'equation',
+  'equation*',
+  'eqnarray',
+  'eqnarray*',
+  'align',
+  'align*',
+  'multline',
+  'multline*',
+  'gather',
+  'gather*',
+  'dmath',
+  'dmath*',
+])
+
+const matrixEnvironmentNames = new Set([
+  'array',
+  'pmatrix',
+  'bmatrix',
+  'smallmatrix',
+  'psmallmatrix',
+  'bsmallmatrix',
+])
+
+function buildEnvironmentInvocation(name: string, argspec: string): string {
+  let begin = `\\begin{${name}}`
+  let mandatoryIndex = 1
+  let optionalIndex = 1
+  for (const ch of argspec) {
+    if (ch === '*') {
+      begin += '*'
+    }
+    else if (ch === '[') {
+      begin += `[opt${optionalIndex++}]`
+    }
+    else if (ch === '{') {
+      begin += `{ARG${mandatoryIndex++}}`
+    }
+  }
+
+  let body = 'BODY'
+  if (matrixEnvironmentNames.has(name)) {
+    body = 'a & b \\ c & d'
+  }
+  else if (equationEnvironmentNames.has(name)) {
+    body = 'a + b = c'
+  }
+
+  const end = `\\end{${name}}`
+  return `${begin}${body}${end}`
+}
+
+const skipMacros = new Set<string>(['document'])
+
+describe('latexNodes2Text parity with pylatexenc', () => {
+  it('matches python conversion for default macros', () => {
+    for (const spec of generatedMacroParsingSpecs) {
+      const lowered = spec.name.toLowerCase()
+      if (lowered.includes('uebung') || lowered.includes('exercise')) {
+        continue
+      }
+      if (skipMacros.has(spec.name)) {
+        continue
+      }
+      const latex = buildMacroInvocation(spec.name, spec.argspec)
+      const ts = tsLatexToText(latex)
+      let py: string
+      try {
+        py = pythonLatexToText(latex)
+      }
+      catch {
+        // Some pylatexenc macros rely on additional state and may raise; skip parity check for those.
+        continue
+      }
+      expect(ts, `macro ${spec.name}`).toBe(py)
+    }
   })
 
-  it('handles accents and unicode replacements', () => {
-    const result = toText('Fran\\c{c}ais \\\'{e}tudiant')
-    expect(result).toBe('Français étudiant')
+  it('matches python conversion for default environments', () => {
+    for (const spec of generatedEnvironmentParsingSpecs) {
+      const latex = buildEnvironmentInvocation(spec.name, spec.argspec)
+      let ts: string
+      try {
+        ts = tsLatexToText(latex)
+      }
+      catch (error) {
+        throw new Error(`environment ${spec.name}: ${(error as Error).message}`)
+      }
+      const py = pythonLatexToText(latex)
+      expect(ts, `environment ${spec.name}`).toBe(py)
+    }
   })
 
-  it('formats itemize environments with bullets', () => {
-    const latex = '\\begin{itemize}\\item First\\item Second\\end{itemize}'
-    const result = toText(latex)
-    expect(result).toContain('First')
-    expect(result).toContain('Second')
-    expect(result).toContain('*')
+  it('matches python conversion for specials', () => {
+    for (const spec of generatedSpecialParsingSpecs) {
+      const latex = `alpha${spec.chars}omega`
+      const ts = tsLatexToText(latex)
+      const py = pythonLatexToText(latex)
+      expect(ts, `special ${spec.chars}`).toBe(py)
+    }
   })
 
-  it('converts math mode using default text mode', () => {
-    const result = toText('$\\alpha + \\frac{1}{2}$')
-    expect(result).toBe('α + 1/2')
+  it('matches python for document metadata macros', () => {
+    const latex = '\\title{Document}\\author{Alice}\\date{June 2024}\\maketitle'
+    const ts = tsLatexToText(latex)
+    const py = pythonLatexToText(latex)
+    expect(ts).toBe(py)
+  })
+
+  it('matches python for matrix environments', () => {
+    const latex = '\\begin{pmatrix}1 & 2 \\ 3 & 4\\end{pmatrix}'
+    let ts: string
+    try {
+      ts = tsLatexToText(latex)
+    }
+    catch (error) {
+      throw new Error(`matrix environment: ${(error as Error).message}`)
+    }
+    const py = pythonLatexToText(latex)
+    expect(ts).toBe(py)
+  })
+
+  it('matches python for placeholder macros', () => {
+    const latex = 'before \\includegraphics{foo} after'
+    const ts = tsLatexToText(latex)
+    const py = pythonLatexToText(latex)
+    expect(ts).toBe(py)
   })
 })

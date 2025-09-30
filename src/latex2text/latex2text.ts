@@ -2,7 +2,7 @@ import { LatexWalker } from '../core/walker'
 import type { LatexEnvironmentNode, LatexMacroArgument, LatexMacroNode, LatexNode, LatexSpecialsNode } from '../core/nodes'
 import type { LatexParsingContext } from '../core/context'
 import { createDefaultParsingContext } from '../core/defaultParsingContext'
-import type { EnvironmentTextReplacementInfo, LatexTextContext, MacroTextReplacementInfo } from './specs'
+import type { LatexTextContext } from './specs'
 import { createDefaultTextContext } from './defaultTextContext'
 
 export type MathModeBehavior = 'text' | 'with-delimiters' | 'verbatim' | 'remove'
@@ -25,6 +25,9 @@ export class LatexNodes2Text {
   private readonly parsingContext: LatexParsingContext
   private readonly textContext: LatexTextContext
   private readonly options: Required<Omit<LatexNodes2TextOptions, 'parsingContext' | 'textContext'>>
+  private docTitle?: string
+  private docAuthor?: string
+  private docDate?: string
 
   constructor(options: LatexNodes2TextOptions = {}) {
     this.parsingContext = options.parsingContext ?? createDefaultParsingContext()
@@ -36,6 +39,33 @@ export class LatexNodes2Text {
       keepBracedGroups: options.keepBracedGroups ?? false,
       keepBracedGroupsMinLength: options.keepBracedGroupsMinLength ?? 0,
     }
+  }
+
+  setDocumentMetadata(field: 'title' | 'author' | 'date', value: string): void {
+    if (field === 'title') {
+      this.docTitle = value
+    }
+    else if (field === 'author') {
+      this.docAuthor = value
+    }
+    else if (field === 'date') {
+      this.docDate = value
+    }
+  }
+
+  getDocumentMetadata(field: 'title' | 'author' | 'date'): string | undefined {
+    if (field === 'title') {
+      return this.docTitle
+    }
+    if (field === 'author') {
+      return this.docAuthor
+    }
+    return this.docDate
+  }
+
+  formatIndentedBlock(contents: string, indent = '    '): string {
+    const normalized = contents.replace(/\n/g, `\n${indent}`)
+    return `\n${indent}${normalized}\n`
   }
 
   latexToText(input: string): string {
@@ -97,18 +127,18 @@ export class LatexNodes2Text {
 
   private handleMacro(node: LatexMacroNode, state: ConversionState): string {
     const spec = this.textContext.getMacro(node.name)
-    const argTexts = node.arguments.map(arg => this.macroArgumentToText(arg, state))
-
     if (!spec) {
-      return argTexts.join('') + this.trailingWhitespace(node)
+      return this.trailingWhitespace(node)
     }
-    if (spec.discard) {
-      return ''
-    }
+
+    const argTexts = node.arguments.map(arg => this.macroArgumentToText(arg, state))
 
     const replacement = spec.replacement
     let rendered = ''
-    if (!replacement) {
+    if (replacement === undefined) {
+      if (spec.discard) {
+        return this.trailingWhitespace(node)
+      }
       rendered = argTexts.join('')
     }
     else if (typeof replacement === 'string') {
@@ -118,7 +148,8 @@ export class LatexNodes2Text {
       rendered = replacement({
         node,
         toText: payload => this.payloadToText(payload, state),
-      } as MacroTextReplacementInfo)
+        context: this,
+      })
     }
 
     return rendered + this.trailingWhitespace(node)
@@ -157,13 +188,10 @@ export class LatexNodes2Text {
     if (!spec) {
       return body
     }
-    if (spec.discard) {
-      return ''
-    }
 
     const replacement = spec.replacement
-    if (!replacement) {
-      return body
+    if (replacement === undefined) {
+      return spec.discard ? '' : body
     }
 
     if (typeof replacement === 'string') {
@@ -175,7 +203,8 @@ export class LatexNodes2Text {
     return replacement({
       node,
       toText: payload => this.payloadToText(payload, innerState),
-    } as EnvironmentTextReplacementInfo)
+      context: this,
+    })
   }
 
   private handleMath(node: LatexNode & { kind: 'math', content: LatexNode[], leftDelimiter: string, rightDelimiter: string }, state: ConversionState): string {
@@ -224,7 +253,12 @@ export class LatexNodes2Text {
       })
     }
     if (template.includes('%s')) {
-      return template.replace(/%s/g, argTexts.join(''))
+      let index = 0
+      return template.replace(/%s/g, () => {
+        const value = argTexts[index]
+        index += 1
+        return value ?? ''
+      })
     }
     return template
   }

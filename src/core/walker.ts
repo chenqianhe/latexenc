@@ -281,7 +281,7 @@ export class LatexWalker {
 
     if (spec) {
       for (const argSpec of spec.arguments) {
-        const parsedArg = this.parseMacroArgument(argSpec)
+        const parsedArg = this.parseMacroArgument(argSpec, { optionalNoSpace: spec.optionalArgNoSpace ?? false })
         if (parsedArg) {
           argumentsList.push(parsedArg)
         }
@@ -300,7 +300,7 @@ export class LatexWalker {
     }
   }
 
-  private parseMacroArgument(argSpec: MacroArgumentSpec): LatexMacroArgument | null {
+  private parseMacroArgument(argSpec: MacroArgumentSpec, options?: { optionalNoSpace?: boolean }): LatexMacroArgument | null {
     switch (argSpec.type) {
       case 'group': {
         this.consumeWhitespace()
@@ -317,10 +317,17 @@ export class LatexWalker {
       }
       case 'optional': {
         const snapshot = this.pos
-        this.consumeWhitespace()
-        if (this.peek() !== '[') {
-          this.pos = snapshot
-          return null
+        if (options?.optionalNoSpace) {
+          if (this.peek() !== '[') {
+            return null
+          }
+        }
+        else {
+          this.consumeWhitespace()
+          if (this.peek() !== '[') {
+            this.pos = snapshot
+            return null
+          }
         }
         const groupNode = this.parseGroup('[', ']', 'optional')
         const arg: LatexMacroArgumentOptional = {
@@ -332,7 +339,9 @@ export class LatexWalker {
       }
       case 'star': {
         const snapshot = this.pos
-        this.consumeWhitespace()
+        if (!options?.optionalNoSpace) {
+          this.consumeWhitespace()
+        }
         if (this.peek() !== '*') {
           this.pos = snapshot
           return null
