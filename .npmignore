@@ -1,0 +1,40 @@
+# Source files
+src/
+tsconfig.json
+
+# Tests
+**/*.test.ts
+**/__tests__/
+
+# Python project (not needed for npm)
+pylatexenc/
+
+# Build tools
+tools/
+eslint.config.mjs
+
+# Documentation that's not needed
+IMPLEMENTATION_STATUS.md
+
+# Git and IDE
+.git/
+.gitignore
+.idea/
+.vscode/
+.claude/
+
+# CI/CD
+.github/
+
+# Logs and temp files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Dependencies
+node_modules/

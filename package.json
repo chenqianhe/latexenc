@@ -2,13 +2,46 @@
   "name": "latexenc",
   "type": "module",
   "version": "1.0.0",
-  "private": true,
-  "description": "",
+  "description": "TypeScript reimplementation of pylatexenc - LaTeX parser and text converter",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "lint": "eslint . --fix"
+    "lint": "eslint . --fix",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "latex",
+    "parser",
+    "converter",
+    "text",
+    "ast",
+    "pylatexenc"
+  ],
+  "author": "Qianhe Chen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chenqianhe/latexenc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chenqianhe/latexenc/issues"
+  },
+  "homepage": "https://github.com/chenqianhe/latexenc#readme",
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.7.1",
