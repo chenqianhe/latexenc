@@ -254,7 +254,7 @@ export class LatexNodes2Text {
   }
 
   private trailingWhitespace(node: { trailingWhitespace: string }): string {
-    return this.options.strictSpaces ? '' : node.trailingWhitespace
+    return this.strictLatexSpacesConfig.betweenLatexConstructs ? '' : node.trailingWhitespace
   }
 
   private macroArgumentToText(argument: LatexMacroArgument, state: ConversionState): string {

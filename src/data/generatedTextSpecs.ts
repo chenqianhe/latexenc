@@ -971,7 +971,7 @@ export const generatedNoneMacroTextSpecs = [
   { discard: false, name: 'text' },
 ] as const
 
-export const generatedStringEnvironmentTextSpecs = [
+export const generatedStringEnvironmentTextSpecs: readonly GeneratedStringEnvironmentTextSpec[] = [
   { discard: false, name: 'center', replacement: '\n%s\n' },
   { discard: false, name: 'flushleft', replacement: '\n%s\n' },
   { discard: false, name: 'flushright', replacement: '\n%s\n' },
@@ -982,7 +982,7 @@ export const generatedStringEnvironmentTextSpecs = [
   { discard: false, name: 'subequations' },
   { discard: false, name: 'figure' },
   { discard: false, name: 'table' },
-] as const
+]
 
 export const generatedStringSpecialTextSpecs = [
   { chars: '&', replacement: '   ' },

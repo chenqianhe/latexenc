@@ -31,7 +31,7 @@ interface ParseStopSpec {
 
 const LETTER_REGEX = /[A-Z@]/i
 
-const VERBATIM_MACRO_NAMES = new Set(generatedVerbatimMacroNames.map(spec => spec.name))
+const VERBATIM_MACRO_NAMES = new Set<string>(generatedVerbatimMacroNames.map(spec => spec.name))
 
 const VERBATIM_ENVIRONMENTS = new Set<string>((() => {
   const names = new Set<string>()
