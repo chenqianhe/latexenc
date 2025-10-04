@@ -5,9 +5,11 @@ import {
   generatedStringMacroTextSpecs,
   generatedStringSpecialTextSpecs,
 } from '../data/generatedTextSpecs'
+import { generatedVerbatimEnvironmentNames } from '../data/generatedParsingSpec'
 import type { EnvironmentTextReplacementInfo, EnvironmentTextSpec, MacroTextReplacementInfo, MacroTextSpec, SpecialsTextSpec } from './specs'
 import type { LatexNodes2Text } from './latex2text'
 import { LatexTextContext } from './specs'
+import { type MathStyle, formatMathTextStyle } from './mathStyles'
 
 const accentCombining: Record<string, string> = {
   '\'': '\u0301',
@@ -136,111 +138,7 @@ function latexToday(): string {
   return `${month} ${now.getDate()}, ${now.getFullYear()}`
 }
 
-type MathStyleKey =
-  | 'bold'
-  | 'italic'
-  | 'bold-italic'
-  | 'script'
-  | 'bold-script'
-  | 'fraktur'
-  | 'doublestruck'
-  | 'bold-fraktur'
-  | 'sans'
-  | 'sans-bold'
-  | 'sans-italic'
-  | 'sans-bold-italic'
-  | 'monospace'
-
-const mathStyleOffsets: Record<MathStyleKey, [number, number]> = {
-  'bold': [0x1D400, 0x1D41A],
-  'italic': [0x1D434, 0x1D44E],
-  'bold-italic': [0x1D468, 0x1D482],
-  'script': [0x1D49C, 0x1D4B6],
-  'bold-script': [0x1D4D0, 0x1D4EA],
-  'fraktur': [0x1D504, 0x1D51E],
-  'doublestruck': [0x1D538, 0x1D552],
-  'bold-fraktur': [0x1D56C, 0x1D586],
-  'sans': [0x1D5A0, 0x1D5BA],
-  'sans-bold': [0x1D5D4, 0x1D5EE],
-  'sans-italic': [0x1D608, 0x1D622],
-  'sans-bold-italic': [0x1D63C, 0x1D656],
-  'monospace': [0x1D670, 0x1D68A],
-}
-
-const mathStyleExceptions: Partial<Record<MathStyleKey, Record<number, string>>> = {
-  italic: {
-    0x68: '\u210E',
-  },
-  script: {
-    0x42: '\u212C',
-    0x45: '\u2130',
-    0x46: '\u2131',
-    0x48: '\u210B',
-    0x49: '\u2110',
-    0x4C: '\u2112',
-    0x4D: '\u2133',
-    0x52: '\u211B',
-    0x65: '\u212F',
-    0x67: '\u210A',
-    0x6F: '\u2134',
-  },
-  fraktur: {
-    0x43: '\u212D',
-    0x48: '\u210C',
-    0x49: '\u2111',
-    0x52: '\u211C',
-    0x5A: '\u2128',
-  },
-  doublestruck: {
-    0x43: '\u2102',
-    0x48: '\u210D',
-    0x4E: '\u2115',
-    0x50: '\u2119',
-    0x51: '\u211A',
-    0x52: '\u211D',
-    0x5A: '\u2124',
-  },
-}
-
-const charCodeA = 'A'.charCodeAt(0)
-const charCodeZ = 'Z'.charCodeAt(0)
-const charCodea = 'a'.charCodeAt(0)
-const charCodez = 'z'.charCodeAt(0)
-
-function formatMathStyleChar(ch: string, style: MathStyleKey): string {
-  if (!ch) {
-    return ch
-  }
-  const code = ch.codePointAt(0)
-  if (code === undefined) {
-    return ch
-  }
-  const exception = mathStyleExceptions[style]?.[code]
-  if (exception) {
-    return exception
-  }
-  const offsets = mathStyleOffsets[style]
-  if (!offsets) {
-    return ch
-  }
-  if (code >= charCodeA && code <= charCodeZ) {
-    return String.fromCodePoint(offsets[0] + (code - charCodeA))
-  }
-  if (code >= charCodea && code <= charCodez) {
-    return String.fromCodePoint(offsets[1] + (code - charCodea))
-  }
-  return ch
-}
-
-function formatMathTextStyle(text: string, style: MathStyleKey): string {
-  let result = ''
-  for (const ch of text) {
-    result += formatMathStyleChar(ch, style)
-  }
-  return result
-}
-
-function makeMathStyleMacro(name: string, style: MathStyleKey): MacroTextSpec {
+function makeMathStyleMacro(name: string, style: MathStyle): MacroTextSpec {
   return {
     name,
     discard: true,
@@ -533,12 +431,34 @@ const manualMacroSpecs: MacroTextSpec[] = [
   {
     name: 'input',
     discard: true,
-    replacement: () => '',
+    replacement: (info) => {
+      const filename = lastArgumentText(info)
+      try {
+        const content = info.context.readInputFile(filename)
+        // Recursively parse the content
+        return info.context.latexToText(content)
+      }
+      catch {
+        // If directory not set or file not found, return placeholder
+        return `[\\input{${filename}}]`
+      }
+    },
   },
   {
     name: 'include',
     discard: true,
-    replacement: () => '',
+    replacement: (info) => {
+      const filename = lastArgumentText(info)
+      try {
+        const content = info.context.readInputFile(filename)
+        // \include adds page breaks, represented as double newlines
+        return `\n\n${info.context.latexToText(content)}\n\n`
+      }
+      catch {
+        // If directory not set or file not found, return placeholder
+        return `[\\include{${filename}}]`
+      }
+    },
   },
   {
     name: '%',
@@ -668,7 +588,7 @@ function formatMatrixEnvironment(info: EnvironmentTextReplacementInfo): string {
   const flatCells = state.rows.flat()
   const maxWidth = flatCells.reduce((max, cell) => Math.max(max, cell.length), 0)
   const formattedRows = state.rows.map(row => row.map(cell => cell.padStart(maxWidth, ' ')).join(' '))
-  return `[ ${formattedRows.join(' ; ')} ]`
+  return `[ ${formattedRows.join('; ')} ]`
 }
 
 const equationEnvironmentNames = new Set([
@@ -711,8 +631,15 @@ for (const name of matrixEnvironmentNames) {
   })
 }
 
-registerEnvironment(environmentSpecsMap, { name: 'verbatim', discard: true })
-registerEnvironment(environmentSpecsMap, { name: 'lstlisting', discard: true })
+const verbatimEnvironmentNames = new Set<string>(generatedVerbatimEnvironmentNames.map(spec => spec.name))
+
+for (const name of verbatimEnvironmentNames) {
+  registerEnvironment(environmentSpecsMap, {
+    name,
+    discard: false,
+    replacement: info => info.node.rawContent ?? info.toText(info.node.children),
+  })
+}
 
 const environments: EnvironmentTextSpec[] = Array.from(environmentSpecsMap.values())
 

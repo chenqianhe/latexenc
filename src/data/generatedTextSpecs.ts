@@ -23,7 +23,7 @@ export interface GeneratedStringSpecialTextSpec {
 }
 
 export const generatedStringMacroTextSpecs = [
-  { discard: true, name: 'today', replacement: 'September 30, 2025' },
+  { discard: true, name: 'today', replacement: 'October 1, 2025' },
   { discard: true, name: 'oe', replacement: 'œ' },
   { discard: true, name: 'OE', replacement: 'Œ' },
   { discard: true, name: 'ae', replacement: 'æ' },

@@ -1,3 +1,4 @@
+import { generatedVerbatimEnvironmentNames, generatedVerbatimMacroNames } from '../data/generatedParsingSpec'
 import type {
   LatexCharsNode,
   LatexCommentNode,
@@ -12,6 +13,7 @@ import type {
   LatexMathNode,
   LatexNode,
   LatexSpecialsNode,
+  LatexVerbNode,
 } from './nodes'
 import type {
   EnvironmentParsingSpec,
@@ -28,6 +30,19 @@ interface ParseStopSpec {
 }
 
 const LETTER_REGEX = /[A-Z@]/i
+
+const VERBATIM_MACRO_NAMES = new Set(generatedVerbatimMacroNames.map(spec => spec.name))
+
+const VERBATIM_ENVIRONMENTS = new Set<string>((() => {
+  const names = new Set<string>()
+  for (const { name } of generatedVerbatimEnvironmentNames) {
+    names.add(name)
+    if (name.endsWith('*')) {
+      names.add(name.slice(0, -1))
+    }
+  }
+  return names
+})())
 
 export interface LatexWalkerOptions {
   context?: LatexParsingContext
@@ -266,6 +281,14 @@ export class LatexWalker {
       return null
     }
 
+    if (VERBATIM_MACRO_NAMES.has(name)) {
+      const starred = this.peek() === '*'
+      if (starred) {
+        this.pos += 1
+      }
+      return this.parseVerb(start, starred)
+    }
+
     if (name === 'begin') {
       return this.parseEnvironment(start)
     }
@@ -288,7 +311,13 @@ export class LatexWalker {
       }
     }
 
-    const trailingWhitespace = this.consumeWhitespace()
+    let trailingWhitespace = ''
+    if (spec?.swallowWhitespace) {
+      this.consumeWhitespace()
+    }
+    else {
+      trailingWhitespace = this.consumeWhitespace()
+    }
 
     return {
       kind: 'macro',
@@ -303,17 +332,30 @@ export class LatexWalker {
   private parseMacroArgument(argSpec: MacroArgumentSpec, options?: { optionalNoSpace?: boolean }): LatexMacroArgument | null {
     switch (argSpec.type) {
       case 'group': {
+        const snapshot = this.pos
         this.consumeWhitespace()
-        if (this.peek() !== '{') {
-          return null
+        if (this.peek() === '{') {
+          const groupNode = this.parseGroup('{', '}', 'group')
+          const arg: LatexMacroArgumentGroup = {
+            type: 'group',
+            nodes: groupNode.children,
+            delimiters: groupNode.delimiters,
+          }
+          return arg
         }
-        const groupNode = this.parseGroup('{', '}', 'group')
-        const arg: LatexMacroArgumentGroup = {
-          type: 'group',
-          nodes: groupNode.children,
-          delimiters: groupNode.delimiters,
+        if (argSpec.allowBare !== false) {
+          const bareNodes = this.parseBareGroupNodes()
+          if (bareNodes) {
+            const arg: LatexMacroArgumentGroup = {
+              type: 'group',
+              nodes: bareNodes,
+              delimiters: { open: '', close: '' },
+            }
+            return arg
+          }
         }
-        return arg
+        this.pos = snapshot
+        return null
       }
       case 'optional': {
         const snapshot = this.pos
@@ -372,6 +414,9 @@ export class LatexWalker {
     const envNameArg = beginMacro.arguments[0] as LatexMacroArgumentGroup
     const envName = this.nodesToText(envNameArg.nodes).trim()
 
+    const normalizedEnvName = envName.endsWith('*') ? envName.slice(0, -1) : envName
+    const isVerbatimEnv = VERBATIM_ENVIRONMENTS.has(envName) || VERBATIM_ENVIRONMENTS.has(normalizedEnvName)
+
     const envSpec: EnvironmentParsingSpec | undefined = this.context.getEnvironmentSpec(envName)
 
     const envArgs: LatexMacroArgument[] = []
@@ -382,7 +427,10 @@ export class LatexWalker {
     if (envSpec) {
       // Parse additional expected arguments according to spec beyond the environment name
       const expectedArgs = envSpec.arguments
-      for (const argSpec of expectedArgs) {
+      const argsToParse = (isVerbatimEnv && expectedArgs.length > 0)
+        ? expectedArgs.slice(0, expectedArgs.length - 1)
+        : expectedArgs
+      for (const argSpec of argsToParse) {
         const parsed = this.parseMacroArgument(argSpec)
         if (parsed) {
           envArgs.push(parsed)
@@ -390,7 +438,29 @@ export class LatexWalker {
       }
     }
 
-    const content = this.parseNodes({ environmentName: envName })
+    const bodyStart = this.pos
+
+    let content: LatexNode[]
+    let rawContent: string | undefined
+    if (isVerbatimEnv) {
+      const verbatimBody = this.consumeVerbatimEnvironmentBody(envName)
+      rawContent = verbatimBody
+      if (verbatimBody.length > 0) {
+        const charsNode: LatexCharsNode = {
+          kind: 'chars',
+          start: bodyStart,
+          end: bodyStart + verbatimBody.length,
+          content: verbatimBody,
+        }
+        content = [charsNode]
+      }
+      else {
+        content = []
+      }
+    }
+    else {
+      content = this.parseNodes({ environmentName: envName })
+    }
 
     // consume the \end{envName}
     if (!this.matchString('\\end')) {
@@ -414,6 +484,7 @@ export class LatexWalker {
       name: envName,
       arguments: envArgs,
       children: content,
+      rawContent,
     }
   }
 
@@ -428,6 +499,9 @@ export class LatexWalker {
         }
         if (node.kind === 'macro') {
           return `\\${node.name}`
+        }
+        if (node.kind === 'verb') {
+          return node.content
         }
         if (node.kind === 'environment') {
           return node.name
@@ -558,6 +632,104 @@ export class LatexWalker {
       throw new Error(`Expected "${expected}" at position ${this.pos}`)
     }
     this.pos += expected.length
+  }
+
+  private parseVerb(start: number, starred: boolean): LatexVerbNode {
+    const delimiter = this.consumeChar()
+    if (!delimiter || delimiter === '\n' || delimiter === '\r' || delimiter === ' ' || delimiter === '\t') {
+      throw new Error(`\\verb${starred ? '*' : ''} requires a non-whitespace delimiter at position ${start}`)
+    }
+
+    let content = ''
+    while (this.pos < this.length) {
+      const ch = this.consumeChar()
+      if (ch === delimiter) {
+        const trailingWhitespace = this.consumeWhitespace()
+        return {
+          kind: 'verb',
+          start,
+          end: this.pos,
+          content,
+          delimiter,
+          starred,
+          trailingWhitespace,
+        }
+      }
+      if (ch === '\n') {
+        throw new Error(`Unterminated \\verb${starred ? '*' : ''} starting at position ${start}`)
+      }
+      content += ch
+    }
+    throw new Error(`Unterminated \\verb${starred ? '*' : ''} starting at position ${start}`)
+  }
+
+  private parseBareGroupNodes(): LatexNode[] | null {
+    if (this.pos >= this.length) {
+      return null
+    }
+    const ch = this.peek()
+    if (!ch) {
+      return null
+    }
+    if (ch === '{' || ch === '}' || ch === '[' || ch === ']' || ch === '%') {
+      return null
+    }
+    if (ch === '\\') {
+      const node = this.parseControlSequence()
+      if (!node) {
+        return null
+      }
+      return [node]
+    }
+    const specials = this.matchSpecials()
+    if (specials) {
+      return [this.createSpecialsNode(specials)]
+    }
+    const start = this.pos
+    const char = this.consumeChar()
+    if (!char) {
+      return null
+    }
+    const node: LatexCharsNode = {
+      kind: 'chars',
+      start,
+      end: this.pos,
+      content: char,
+    }
+    return [node]
+  }
+
+  private consumeVerbatimEnvironmentBody(envName: string): string {
+    const start = this.pos
+    let idx = this.pos
+    while (idx < this.length) {
+      if (this.input[idx] === '\\' && this.input.startsWith('\\end', idx)) {
+        let probe = idx + 4
+        while (probe < this.length && /\s/.test(this.input[probe])) {
+          probe += 1
+        }
+        if (probe >= this.length || this.input[probe] !== '{') {
+          idx += 1
+          continue
+        }
+        probe += 1
+        const nameStart = probe
+        while (probe < this.length && this.input[probe] !== '}') {
+          probe += 1
+        }
+        if (probe >= this.length) {
+          break
+        }
+        const candidate = this.input.slice(nameStart, probe).trim()
+        if (candidate === envName) {
+          const body = this.input.slice(start, idx)
+          this.pos = idx
+          return body
+        }
+      }
+      idx += 1
+    }
+    throw new Error(`Unterminated verbatim environment ${envName} starting at position ${start}`)
   }
 
   private consumeChar(): string {

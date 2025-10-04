@@ -3,6 +3,8 @@ import {
   generatedEnvironmentParsingSpecs,
   generatedMacroParsingSpecs,
   generatedSpecialParsingSpecs,
+  generatedVerbatimEnvironmentNames,
+  generatedVerbatimMacroNames,
 } from './generatedParsingSpec'
 import {
   generatedFunctionEnvironmentNames,
@@ -33,6 +35,15 @@ describe('generated parsing specs', () => {
     const specials = generatedSpecialParsingSpecs.map(spec => spec.chars)
     expect(specials).toContain('---')
     expect(specials).toContain('!`')
+  })
+
+  it('lists verbatim-aware macros and environments', () => {
+    const verbMacros = generatedVerbatimMacroNames.map(spec => spec.name)
+    expect(verbMacros).toContain('verb')
+
+    const verbEnvs = generatedVerbatimEnvironmentNames.map(spec => spec.name)
+    expect(verbEnvs).toContain('verbatim')
+    expect(verbEnvs).toContain('lstlisting')
   })
 })
 

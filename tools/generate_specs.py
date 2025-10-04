@@ -15,6 +15,7 @@ if str(PYLATEXENC_ROOT) not in sys.path:
     sys.path.insert(0, str(PYLATEXENC_ROOT))
 
 from pylatexenc.latexwalker import _defaultspecs as lw_specs
+from pylatexenc.macrospec import VerbatimArgsParser, LstListingArgsParser
 from pylatexenc.latex2text import _defaultspecs as l2t_specs
 
 OUTPUT_DIR = PROJECT_ROOT / "src" / "data"
@@ -30,11 +31,19 @@ def format_ts_array(name: str, entries: Iterable[dict]) -> str:
     return "\n".join(lines)
 
 
+def unwrap_parser(parser):
+    if parser is None:
+        return None
+    return getattr(parser, 'args_parser', parser)
+
+
 # ---------------- Parsing specs (LatexWalker) ----------------
 macro_entries = []
+verbatim_macro_names: set[str] = set()
 for category, bucket in lw_specs.specs:
     for spec in bucket["macros"]:
         parser = getattr(spec, "args_parser", None)
+        base_parser = unwrap_parser(parser)
         argspec = getattr(parser, "argspec", "") if parser else ""
         optional_no_space = bool(getattr(parser, "optional_arg_no_space", False)) if parser else False
         macro_entries.append({
@@ -42,6 +51,8 @@ for category, bucket in lw_specs.specs:
             "argspec": argspec,
             "optionalArgNoSpace": optional_no_space,
         })
+        if isinstance(base_parser, VerbatimArgsParser) and base_parser.verbatim_arg_type == 'verb-macro':
+            verbatim_macro_names.add(spec.macroname)
 
 # Deduplicate while preserving order
 seen = set()
@@ -54,9 +65,11 @@ for entry in macro_entries:
 
 environment_entries = []
 seen_env = set()
+verbatim_environment_names: set[str] = set()
 for category, bucket in lw_specs.specs:
     for spec in bucket["environments"]:
         parser = getattr(spec, "args_parser", None)
+        base_parser = unwrap_parser(parser)
         argspec = getattr(parser, "argspec", "") if parser else ""
         is_math = bool(getattr(spec, "is_math_mode", False))
         name = spec.environmentname
@@ -68,6 +81,10 @@ for category, bucket in lw_specs.specs:
             "argspec": argspec,
             "isMathMode": is_math,
         })
+        if isinstance(base_parser, VerbatimArgsParser) and base_parser.verbatim_arg_type == 'verbatim-environment':
+            verbatim_environment_names.add(name)
+        if isinstance(base_parser, LstListingArgsParser):
+            verbatim_environment_names.add(name)
 
 special_entries = []
 seen_spec = set()
@@ -87,6 +104,8 @@ parsing_ts = "\n\n".join([
     format_ts_array("generatedMacroParsingSpecs", unique_macro_entries),
     format_ts_array("generatedEnvironmentParsingSpecs", environment_entries),
     format_ts_array("generatedSpecialParsingSpecs", special_entries),
+    format_ts_array("generatedVerbatimMacroNames", [{"name": name} for name in sorted(verbatim_macro_names)]),
+    format_ts_array("generatedVerbatimEnvironmentNames", [{"name": name} for name in sorted(verbatim_environment_names)]),
 ])
 
 (OUTPUT_DIR / "generatedParsingSpec.ts").write_text(parsing_ts, encoding="utf-8")

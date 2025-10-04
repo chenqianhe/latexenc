@@ -53,6 +53,55 @@ describe('latexWalker macro parsing', () => {
     }
     expect(specials.chars).toBe('---')
   })
+
+  it('parses verb macros with and without star modifiers', () => {
+    const walker = new LatexWalker('\\verb|text| \\verb*|a b|', { context })
+    const nodes = walker.getNodes()
+    expect(nodes).toHaveLength(2)
+
+    const verb = nodes[0]
+    expect(verb.kind).toBe('verb')
+    if (verb.kind !== 'verb') {
+      throw new Error('Expected verb node')
+    }
+    expect(verb.content).toBe('text')
+    expect(verb.delimiter).toBe('|')
+    expect(verb.starred).toBe(false)
+    expect(verb.trailingWhitespace).toBe(' ')
+
+    const verbStar = nodes[1]
+    expect(verbStar.kind).toBe('verb')
+    if (verbStar.kind !== 'verb') {
+      throw new Error('Expected verb node')
+    }
+    expect(verbStar.content).toBe('a b')
+    expect(verbStar.starred).toBe(true)
+  })
+
+  it('parses bare mandatory arguments for accent macros', () => {
+    const walker = new LatexWalker('\\hat x', { context })
+    const nodes = walker.getNodes()
+    expect(nodes).toHaveLength(1)
+    const macro = nodes[0]
+    expect(macro.kind).toBe('macro')
+    if (macro.kind !== 'macro') {
+      throw new Error('Expected macro node')
+    }
+    expect(macro.arguments).toHaveLength(1)
+    const group = macro.arguments[0]
+    expect(group.type).toBe('group')
+    if (group.type !== 'group') {
+      throw new Error('Expected group argument')
+    }
+    expect(group.delimiters).toEqual({ open: '', close: '' })
+    expect(group.nodes).toHaveLength(1)
+    const charNode = group.nodes[0]
+    expect(charNode.kind).toBe('chars')
+    if (charNode.kind !== 'chars') {
+      throw new Error('Expected chars node')
+    }
+    expect(charNode.content).toBe('x')
+  })
 })
 
 describe('latexWalker environment parsing', () => {
@@ -90,5 +139,28 @@ describe('latexWalker environment parsing', () => {
     expect(env.name).toBe('align')
     expect(env.arguments).toHaveLength(0)
     expect(env.children.some(node => node.kind === 'macro' && node.name === '\\')).toBe(true)
+  })
+
+  it('treats verbatim environments as raw text', () => {
+    const latex = ['\\begin{verbatim}', 'line1', '\\textbf{not a macro}', '\\end{verbatim}'].join('\n')
+    const walker = new LatexWalker(latex, { context })
+    const nodes = walker.getNodes()
+    expect(nodes).toHaveLength(1)
+    const env = nodes[0]
+    expect(env.kind).toBe('environment')
+    if (env.kind !== 'environment') {
+      throw new Error('Expected environment node')
+    }
+    expect(env.name).toBe('verbatim')
+    const expectedBody = `line1\n\\textbf{not a macro}\n`
+      .replace(/\\n/g, '\n')
+    expect(env.rawContent).toBe(expectedBody)
+    expect(env.children).toHaveLength(1)
+    const child = env.children[0]
+    expect(child.kind).toBe('chars')
+    if (child.kind !== 'chars') {
+      throw new Error('Expected chars node inside verbatim environment')
+    }
+    expect(child.content).toBe(expectedBody)
   })
 })

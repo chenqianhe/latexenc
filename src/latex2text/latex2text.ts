@@ -1,9 +1,24 @@
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { LatexWalker } from '../core/walker'
-import type { LatexEnvironmentNode, LatexMacroArgument, LatexMacroNode, LatexNode, LatexSpecialsNode } from '../core/nodes'
+import type {
+  LatexEnvironmentNode,
+  LatexMacroArgument,
+  LatexMacroNode,
+  LatexNode,
+  LatexSpecialsNode,
+  LatexVerbNode,
+} from '../core/nodes'
 import type { LatexParsingContext } from '../core/context'
 import { createDefaultParsingContext } from '../core/defaultParsingContext'
 import type { LatexTextContext } from './specs'
 import { createDefaultTextContext } from './defaultTextContext'
+import {
+  type StrictLatexSpacesConfig,
+  type StrictLatexSpacesOption,
+  getEquationWhitespaceConfig,
+  parseStrictLatexSpacesConfig,
+} from './whitespaceConfig'
 
 export type MathModeBehavior = 'text' | 'with-delimiters' | 'verbatim' | 'remove'
 
@@ -12,30 +27,52 @@ export interface LatexNodes2TextOptions {
   textContext?: LatexTextContext
   mathMode?: MathModeBehavior
   keepComments?: boolean
+  /**
+   * @deprecated Use strictLatexSpaces for fine-grained control
+   */
   strictSpaces?: boolean
+  /**
+   * Fine-grained whitespace handling configuration
+   * Supports presets: 'based-on-source', 'macros', 'except-in-equations'
+   * Or custom configuration object
+   */
+  strictLatexSpaces?: StrictLatexSpacesOption
   keepBracedGroups?: boolean
   keepBracedGroupsMinLength?: number
 }
 
 interface ConversionState {
   inMath: boolean
+  whitespaceConfig: StrictLatexSpacesConfig
 }
 
 export class LatexNodes2Text {
   private readonly parsingContext: LatexParsingContext
   private readonly textContext: LatexTextContext
-  private readonly options: Required<Omit<LatexNodes2TextOptions, 'parsingContext' | 'textContext'>>
+  private readonly options: Required<Omit<LatexNodes2TextOptions, 'parsingContext' | 'textContext' | 'strictSpaces' | 'strictLatexSpaces'>>
+  private readonly strictLatexSpacesConfig: StrictLatexSpacesConfig
   private docTitle?: string
   private docAuthor?: string
   private docDate?: string
+  private texInputDirectory?: string
+  private strictInput = true
 
   constructor(options: LatexNodes2TextOptions = {}) {
     this.parsingContext = options.parsingContext ?? createDefaultParsingContext()
     this.textContext = options.textContext ?? createDefaultTextContext()
+
+    // Handle deprecated strictSpaces option
+    let strictLatexSpaces = options.strictLatexSpaces
+    if (options.strictSpaces !== undefined && options.strictLatexSpaces === undefined) {
+      // Legacy strictSpaces boolean - map to new system
+      strictLatexSpaces = options.strictSpaces
+    }
+
+    this.strictLatexSpacesConfig = parseStrictLatexSpacesConfig(strictLatexSpaces)
+
     this.options = {
       mathMode: options.mathMode ?? 'text',
       keepComments: options.keepComments ?? false,
-      strictSpaces: options.strictSpaces ?? false,
       keepBracedGroups: options.keepBracedGroups ?? false,
       keepBracedGroupsMinLength: options.keepBracedGroupsMinLength ?? 0,
     }
@@ -63,6 +100,48 @@ export class LatexNodes2Text {
     return this.docDate
   }
 
+  /**
+   * Set directory for \input file resolution
+   * @param directory - Base directory for resolving relative paths
+   * @param strictInput - If true, throw on missing files; if false, return placeholder
+   */
+  setTexInputDirectory(directory: string, strictInput = true): void {
+    if (!fs.existsSync(directory)) {
+      throw new Error(`Directory does not exist: ${directory}`)
+    }
+    this.texInputDirectory = path.resolve(directory)
+    this.strictInput = strictInput
+  }
+
+  /**
+   * Read a LaTeX input file
+   * @param filename - Filename relative to texInputDirectory
+   * @returns File contents as string
+   */
+  readInputFile(filename: string): string {
+    if (!this.texInputDirectory) {
+      throw new Error('TeX input directory not set. Call setTexInputDirectory() first.')
+    }
+
+    // Add .tex extension if not present
+    let normalizedFilename = filename
+    if (!filename.endsWith('.tex')) {
+      normalizedFilename = `${filename}.tex`
+    }
+
+    const fullPath = path.join(this.texInputDirectory, normalizedFilename)
+
+    try {
+      return fs.readFileSync(fullPath, 'utf-8')
+    }
+    catch {
+      if (this.strictInput) {
+        throw new Error(`Cannot read input file: ${filename}`)
+      }
+      return `[Could not read file: ${filename}]`
+    }
+  }
+
   formatIndentedBlock(contents: string, indent = '    '): string {
     const normalized = contents.replace(/\n/g, `\n${indent}`)
     return `\n${indent}${normalized}\n`
@@ -75,7 +154,10 @@ export class LatexNodes2Text {
   }
 
   nodesToText(nodes: LatexNode | LatexNode[]): string {
-    const state: ConversionState = { inMath: false }
+    const state: ConversionState = {
+      inMath: false,
+      whitespaceConfig: this.strictLatexSpacesConfig,
+    }
     if (Array.isArray(nodes)) {
       return this.nodesArrayToText(nodes, state)
     }
@@ -102,13 +184,19 @@ export class LatexNodes2Text {
         return this.options.keepComments ? node.content : ''
       case 'specials':
         return this.handleSpecials(node, state)
+      case 'verb':
+        return this.handleVerb(node, state)
       default:
         return ''
     }
   }
 
-  private handleChars(content: string, _state: ConversionState): string {
-    if (this.options.strictSpaces) {
+  private handleChars(content: string, state: ConversionState): string {
+    // For now, keep the simple strict behavior
+    // More sophisticated whitespace handling based on whitespaceConfig
+    // could be implemented here in the future
+    if (state.whitespaceConfig.betweenLatexConstructs) {
+      // Normalize whitespace when strict
       return content.replace(/\s+/g, match => (match.includes('\n') ? '\n' : ' '))
     }
     return content
@@ -165,7 +253,7 @@ export class LatexNodes2Text {
     return this.nodeToText(payload, state)
   }
 
-  private trailingWhitespace(node: LatexMacroNode): string {
+  private trailingWhitespace(node: { trailingWhitespace: string }): string {
     return this.options.strictSpaces ? '' : node.trailingWhitespace
   }
 
@@ -182,8 +270,17 @@ export class LatexNodes2Text {
   private handleEnvironment(node: LatexEnvironmentNode, state: ConversionState): string {
     const spec = this.textContext.getEnvironment(node.name)
     const envSpec = this.parsingContext.getEnvironmentSpec(node.name)
-    const innerState = { ...state, inMath: envSpec?.isMathMode ?? state.inMath }
-    const body = this.nodesArrayToText(node.children, innerState)
+    const isMathMode = envSpec?.isMathMode ?? state.inMath
+    const innerState: ConversionState = {
+      ...state,
+      inMath: isMathMode,
+      whitespaceConfig: isMathMode
+        ? getEquationWhitespaceConfig(state.whitespaceConfig)
+        : state.whitespaceConfig,
+    }
+    const body = node.rawContent !== undefined
+      ? node.rawContent
+      : this.nodesArrayToText(node.children, innerState)
 
     if (!spec) {
       return body
@@ -208,7 +305,11 @@ export class LatexNodes2Text {
   }
 
   private handleMath(node: LatexNode & { kind: 'math', content: LatexNode[], leftDelimiter: string, rightDelimiter: string }, state: ConversionState): string {
-    const innerState = { ...state, inMath: true }
+    const innerState: ConversionState = {
+      ...state,
+      inMath: true,
+      whitespaceConfig: getEquationWhitespaceConfig(state.whitespaceConfig),
+    }
     const inner = this.nodesArrayToText(node.content, innerState)
     switch (this.options.mathMode) {
       case 'remove':
@@ -234,6 +335,12 @@ export class LatexNodes2Text {
       return spec.replacement
     }
     return spec.replacement(node)
+  }
+
+  private handleVerb(node: LatexVerbNode, _state: ConversionState): string {
+    const visibleSpace = '␣'
+    const verbText = node.starred ? node.content.replace(/ /g, visibleSpace) : node.content
+    return verbText + this.trailingWhitespace(node)
   }
 
   private applyTemplate(template: string, argTexts: string[], extras?: Record<string, string>): string {

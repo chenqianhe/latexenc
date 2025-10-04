@@ -10,9 +10,9 @@
     "test": "vitest run",
     "lint": "eslint . --fix"
   },
-  "dependencies": {},
   "devDependencies": {
     "@antfu/eslint-config": "^2.7.1",
+    "@types/node": "^24.6.2",
     "eslint": "^9.4.0",
     "typescript": "^5.5.3",
     "vitest": "^1.5.3"

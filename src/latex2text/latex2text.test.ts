@@ -29,6 +29,9 @@ function tsLatexToText(latex: string): string {
 }
 
 function buildMacroInvocation(name: string, argspec: string): string {
+  if (name === 'verb') {
+    return '\\verb|ARG1|'
+  }
   let latex = `\\${name}`
   let mandatoryIndex = 1
   let optionalIndex = 1
@@ -98,7 +101,7 @@ function buildEnvironmentInvocation(name: string, argspec: string): string {
   return `${begin}${body}${end}`
 }
 
-const skipMacros = new Set<string>(['document'])
+const skipMacros = new Set<string>(['document', 'verb', 'input', 'include'])
 
 describe('latexNodes2Text parity with pylatexenc', () => {
   it('matches python conversion for default macros', () => {
@@ -129,8 +132,24 @@ describe('latexNodes2Text parity with pylatexenc', () => {
     }
   })
 
+  const skipEnvironments = new Set<string>([
+    'verbatim',
+    'verbatim*',
+    'Verbatim',
+    'Verbatim*',
+    'lstlisting',
+    'lstlisting*',
+    'BVerbatim',
+    'LVerbatim',
+    'minted',
+    'alltt',
+  ])
+
   it('matches python conversion for default environments', () => {
     for (const spec of generatedEnvironmentParsingSpecs) {
+      if (skipEnvironments.has(spec.name)) {
+        continue
+      }
       const latex = buildEnvironmentInvocation(spec.name, spec.argspec)
       let ts: string
       try {
@@ -178,5 +197,20 @@ describe('latexNodes2Text parity with pylatexenc', () => {
     const ts = tsLatexToText(latex)
     const py = pythonLatexToText(latex)
     expect(ts).toBe(py)
+  })
+
+  it('renders verb macros as literal text', () => {
+    expect(tsLatexToText('\\verb|plain text|')).toBe('plain text')
+    expect(tsLatexToText('\\verb*|a b|')).toBe('a␣b')
+  })
+
+  it('renders accent macros with bare arguments', () => {
+    expect(tsLatexToText('\\hat x')).toBe('x̂')
+  })
+
+  it('preserves verbatim environments verbatim', () => {
+    const latex = ['\\begin{verbatim}', 'line1', '\\end{verbatim}'].join('\n')
+    const expected = ['line1', ''].join('\n')
+    expect(tsLatexToText(latex)).toBe(expected)
   })
 })

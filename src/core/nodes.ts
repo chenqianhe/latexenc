@@ -6,6 +6,7 @@ export type LatexNode =
   | LatexMathNode
   | LatexCommentNode
   | LatexSpecialsNode
+  | LatexVerbNode
 
 export type LatexNodeKind =
   | 'chars'
@@ -15,6 +16,7 @@ export type LatexNodeKind =
   | 'math'
   | 'comment'
   | 'specials'
+  | 'verb'
 
 export interface LatexAstNode {
   kind: LatexNodeKind
@@ -77,6 +79,7 @@ export interface LatexEnvironmentNode extends LatexAstNode {
   name: string
   arguments: LatexMacroArgument[]
   children: LatexNode[]
+  rawContent?: string
 }
 
 export interface LatexMathNode extends LatexAstNode {
@@ -96,4 +99,12 @@ export interface LatexCommentNode extends LatexAstNode {
 export interface LatexSpecialsNode extends LatexAstNode {
   kind: 'specials'
   chars: string
+}
+
+export interface LatexVerbNode extends LatexAstNode {
+  kind: 'verb'
+  content: string
+  delimiter: string
+  starred: boolean
+  trailingWhitespace: string
 }

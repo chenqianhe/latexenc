@@ -10,7 +10,7 @@ function parseArgSpecString(spec: string): MacroArgumentSpec[] {
   const args: MacroArgumentSpec[] = []
   for (const ch of spec.split('')) {
     if (ch === '{') {
-      args.push({ type: 'group' })
+      args.push({ type: 'group', allowBare: true })
     }
     else if (ch === '[') {
       args.push({ type: 'optional' })
@@ -28,11 +28,19 @@ function buildMacroSpecs(): MacroParsingSpec[] {
     end: { swallowWhitespace: true },
   }
 
+  const noBareMacros = new Set([
+    'begin',
+    'end',
+  ])
+
   const specs: MacroParsingSpec[] = generatedMacroParsingSpecs.map((entry) => {
     const base: MacroParsingSpec = {
       name: entry.name,
       arguments: parseArgSpecString(entry.argspec),
       optionalArgNoSpace: entry.optionalArgNoSpace,
+    }
+    if (noBareMacros.has(base.name)) {
+      base.arguments = base.arguments.map(arg => (arg.type === 'group' ? { ...arg, allowBare: false } : arg))
     }
     const override = manualOverrides[entry.name]
     if (override) {

@@ -245,6 +245,7 @@ export const generatedEnvironmentParsingSpecs = [
   { argspec: '', isMathMode: true, name: 'split' },
   { argspec: '{', isMathMode: false, name: 'verbatim' },
   { argspec: '[{', isMathMode: false, name: 'lstlisting' },
+  { argspec: '[{', isMathMode: false, name: 'minted' },
   { argspec: '[', isMathMode: false, name: 'theorem' },
   { argspec: '[', isMathMode: false, name: 'proposition' },
   { argspec: '[', isMathMode: false, name: 'lemma' },
@@ -275,4 +276,21 @@ export const generatedSpecialParsingSpecs = [
   { chars: '---' },
   { chars: '!`' },
   { chars: '?`' },
+] as const
+
+export const generatedVerbatimMacroNames = [
+  { name: 'verb' },
+] as const
+
+export const generatedVerbatimEnvironmentNames = [
+  { name: 'lstlisting' },
+  { name: 'lstlisting*' },
+  { name: 'verbatim' },
+  { name: 'verbatim*' },
+  { name: 'Verbatim' },
+  { name: 'Verbatim*' },
+  { name: 'BVerbatim' },
+  { name: 'LVerbatim' },
+  { name: 'minted' },
+  { name: 'alltt' },
 ] as const
