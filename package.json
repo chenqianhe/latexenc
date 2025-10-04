@@ -3,24 +3,15 @@
   "type": "module",
   "version": "1.0.0",
   "description": "TypeScript reimplementation of pylatexenc - LaTeX parser and text converter",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+  "author": "Qianhe Chen",
+  "license": "MIT",
+  "homepage": "https://github.com/chenqianhe/latexenc#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chenqianhe/latexenc.git"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "build": "tsc",
-    "test": "vitest run",
-    "lint": "eslint . --fix",
-    "prepublishOnly": "npm run build && npm test"
+  "bugs": {
+    "url": "https://github.com/chenqianhe/latexenc/issues"
   },
   "keywords": [
     "latex",
@@ -30,18 +21,27 @@
     "ast",
     "pylatexenc"
   ],
-  "author": "Qianhe Chen",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/chenqianhe/latexenc.git"
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
   },
-  "bugs": {
-    "url": "https://github.com/chenqianhe/latexenc/issues"
-  },
-  "homepage": "https://github.com/chenqianhe/latexenc#readme",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
   "engines": {
     "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "eslint . --fix",
+    "prepublishOnly": "npm run build && npm test"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.7.1",

@@ -6,9 +6,9 @@
     "moduleResolution": "Bundler",
     "types": ["node"],
     "strict": true,
-    "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
+    "outDir": "dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
