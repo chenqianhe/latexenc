@@ -41,7 +41,9 @@
     "build": "tsc",
     "test": "vitest run",
     "lint": "eslint . --fix",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "publish:dry": "npm publish --dry-run",
+    "publish:prod": "npm publish"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.7.1",
