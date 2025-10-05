@@ -1,7 +1,7 @@
 {
   "name": "latexenc",
   "type": "module",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TypeScript reimplementation of pylatexenc - LaTeX parser and text converter",
   "author": "Qianhe Chen",
   "license": "MIT",
@@ -38,7 +38,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "test": "vitest run",
     "lint": "eslint . --fix",
     "prepublishOnly": "npm run build && npm test",
@@ -49,6 +49,7 @@
     "@antfu/eslint-config": "^2.7.1",
     "@types/node": "^24.6.2",
     "eslint": "^9.4.0",
+    "tsup": "^8.5.0",
     "typescript": "^5.5.3",
     "vitest": "^1.5.3"
   }
